@@ -186,6 +186,10 @@
   .badge.st-NOT_CANONICAL{color:var(--bad);background:var(--bad-bg);}
   .badge.st-OTHER, .badge.st-CLEAN_PARAMS, .badge.st-DUPLICATE, .badge.st-NO_INDEX{color:var(--ink-dim);background:var(--paper-dim);}
   .badge.http{color:#fff;background:var(--bad);}
+  .badge.tt-dead_in_index, .badge.tt-generic_review{color:var(--bad);background:var(--bad-bg);}
+  .badge.tt-low_quality, .badge.tt-thin_content, .badge.tt-redirect_check, .badge.tt-sitemap_gap{color:var(--warn);background:var(--warn-bg);}
+  .task-instruction{font-size:12.5px;color:var(--ink);line-height:1.5;background:var(--paper-dim);border-radius:8px;padding:8px 10px;}
+  .task-group-count{font-weight:700;}
   .row-meta{font-size:11.5px;color:var(--ink-dim);display:flex;gap:10px;flex-wrap:wrap;}
   .row-meta a{color:var(--ink-dim);text-decoration:underline;text-decoration-style:dotted;}
   .row-title{font-size:12px;color:var(--ink-dim);}
@@ -217,6 +221,18 @@
   <section class="tiles" id="tiles"></section>
 
   <div id="attnBox"></div>
+
+  <section class="panel" id="tasksPanel">
+    <div class="panel-head">
+      <h2>Задачи <span class="count-pill warn" id="tasksCount">0</span></h2>
+      <span style="font-size:11.5px;color:var(--ink-dim);">закрываются сами, когда проблема пропадает из данных Яндекса</span>
+    </div>
+    <div class="table-controls">
+      <input type="search" id="tasksSearch" placeholder="поиск по адресу или тексту…">
+      <div id="tasksChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div class="row-list" id="tasksList" style="max-height:640px;"></div>
+  </section>
 
   <section class="panel">
     <div class="panel-head">
@@ -533,7 +549,86 @@
       .catch(function(){ boot([]); });
   }
 
+  var TASK_TYPE_LABELS = {
+    low_quality:'Низкое качество', redirect_check:'Проверить редирект', generic_review:'Проверить вручную',
+    thin_content:'Не индексировалась', dead_in_index:'404, но в поиске', sitemap_gap:'Пропуск в sitemap'
+  };
+  var taskState = { all:[], filterType:null };
+
+  function renderTaskChips(){
+    var open = taskState.all.filter(function(t){ return t.status==='open'; });
+    var counts = {};
+    open.forEach(function(t){ counts[t.type] = (counts[t.type]||0)+1; });
+    var box = document.getElementById('tasksChips');
+    box.innerHTML = '';
+    var allChip = el('div','chip'+(taskState.filterType===null?' active':''), 'все');
+    allChip.onclick = function(){ taskState.filterType=null; refreshTasks(); };
+    box.appendChild(allChip);
+    Object.keys(counts).sort(function(a,b){return counts[b]-counts[a];}).forEach(function(tp){
+      var c = el('div','chip'+(taskState.filterType===tp?' active':''), (TASK_TYPE_LABELS[tp]||tp)+' '+counts[tp]);
+      c.onclick = function(){ taskState.filterType = (taskState.filterType===tp)?null:tp; refreshTasks(); };
+      box.appendChild(c);
+    });
+  }
+
+  function renderTaskItem(t){
+    var row = el('div','row-item');
+    var top = el('div','row-top');
+    if(t.url){
+      var a = el('a','row-url', shortUrl(t.url));
+      a.href = t.url; a.target='_blank'; a.rel='noopener';
+      top.appendChild(a);
+    } else {
+      top.appendChild(el('div','row-url', t.title + (t.count ? ' <span class="task-group-count">('+t.count+')</span>' : '')));
+    }
+    var badges = el('div','row-badges');
+    badges.innerHTML = '<span class="badge tt-'+t.type+'">'+(TASK_TYPE_LABELS[t.type]||t.type)+'</span>';
+    top.appendChild(badges);
+    row.appendChild(top);
+    if(t.url) row.appendChild(el('div','row-title', t.title));
+    row.appendChild(el('div','task-instruction', t.instruction||''));
+    var meta = el('div','row-meta');
+    meta.innerHTML = '<span>обнаружено '+fmtDate(t.created_date)+'</span>' + (t.last_checked_date ? '<span>проверено '+fmtDate(t.last_checked_date)+'</span>' : '');
+    row.appendChild(meta);
+    return row;
+  }
+
+  function refreshTasks(){
+    var open = taskState.all.filter(function(t){ return t.status==='open'; });
+    var q = (document.getElementById('tasksSearch').value||'').toLowerCase();
+    var filtered = open.filter(function(t){
+      if(taskState.filterType && t.type!==taskState.filterType) return false;
+      if(!q) return true;
+      var hay = ((t.url||'')+' '+(t.title||'')+' '+(t.instruction||'')).toLowerCase();
+      return hay.indexOf(q)!==-1;
+    });
+    document.getElementById('tasksCount').textContent = open.length;
+    var list = document.getElementById('tasksList');
+    list.innerHTML = '';
+    if(filtered.length===0){
+      list.appendChild(el('div','empty-state', open.length===0 ? 'Открытых задач нет — всё разобрано.' : 'Ничего не найдено по фильтру.'));
+      return;
+    }
+    filtered.forEach(function(t){ list.appendChild(renderTaskItem(t)); });
+  }
+
+  function loadTasks(){
+    fetch('data/tasks.json', { cache: 'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(tasks){
+        taskState.all = tasks || [];
+        document.getElementById('tasksSearch').addEventListener('input', refreshTasks);
+        renderTaskChips();
+        refreshTasks();
+      })
+      .catch(function(){
+        document.getElementById('tasksList').innerHTML = '';
+        document.getElementById('tasksList').appendChild(el('div','empty-state','Не удалось загрузить список задач.'));
+      });
+  }
+
   loadFromJson();
+  loadTasks();
 })();
 </script>
 </body>
