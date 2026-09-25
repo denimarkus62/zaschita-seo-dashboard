@@ -126,6 +126,8 @@
   }
   .attn strong{font-size:13.5px;}
   .attn ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-dim);}
+  .attn ul a{color:var(--ink);text-decoration:underline;text-decoration-style:dotted;}
+  .attn ul a:hover{color:var(--accent);}
   .attn.empty{
     background:var(--good-bg);border-color:rgba(31,138,95,0.3);
   }
@@ -360,11 +362,14 @@
     }
     var a = el('div','attn');
     var html = '<div class="icon">!</div><div><strong>Требует внимания — '+(critical.length+watch.length)+'</strong><ul>';
+    function attnLink(u){
+      return '<a href="'+u+'" target="_blank" rel="noopener">'+shortUrl(u)+'</a>';
+    }
     critical.slice(0,5).forEach(function(r){
-      html += '<li>'+shortUrl(r.url)+' — '+(STATUS_LABELS[r.excluded_url_status]||r.excluded_url_status)+(r.bad_http_status?' ('+r.bad_http_status+')':'')+'</li>';
+      html += '<li>'+attnLink(r.url)+' — '+(STATUS_LABELS[r.excluded_url_status]||r.excluded_url_status)+(r.bad_http_status?' ('+r.bad_http_status+')':'')+'</li>';
     });
     watch.slice(0,5).forEach(function(r){
-      html += '<li>'+shortUrl(r.url)+' — категория ушла редиректом'+(r.target_url?(' на '+shortUrl(r.target_url)):'')+'</li>';
+      html += '<li>'+attnLink(r.url)+' — категория ушла редиректом'+(r.target_url?(' на '+attnLink(r.target_url)):'')+'</li>';
     });
     html += '</ul></div>';
     a.innerHTML = html;
