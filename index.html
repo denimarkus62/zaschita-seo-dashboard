@@ -610,6 +610,7 @@
     var open = taskState.all.filter(function(t){ return t.status==='open'; });
     var filtered = getFilteredTasks();
     document.getElementById('tasksCount').textContent = open.length;
+    renderTaskChips();
     var list = document.getElementById('tasksList');
     list.innerHTML = '';
     if(filtered.length===0){
