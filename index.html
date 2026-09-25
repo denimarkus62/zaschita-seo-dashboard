@@ -187,7 +187,9 @@
   .badge.http{color:#fff;background:var(--bad);}
   .badge.tt-dead_in_index, .badge.tt-generic_review{color:var(--bad);background:var(--bad-bg);}
   .badge.tt-low_quality, .badge.tt-thin_content, .badge.tt-redirect_check, .badge.tt-sitemap_gap{color:var(--warn);background:var(--warn-bg);}
-  .task-instruction{font-size:12.5px;color:var(--ink);line-height:1.5;background:var(--paper-dim);border-radius:8px;padding:8px 10px;}
+  .task-instruction{font-size:12.5px;color:var(--ink);line-height:1.5;background:var(--paper-dim);border-radius:8px;padding:8px 10px;word-break:break-word;}
+  .task-instruction a{color:var(--ink);text-decoration:underline;text-decoration-style:dotted;}
+  .task-instruction a:hover{color:var(--accent);}
   .task-group-count{font-weight:700;}
   .row-meta{font-size:11.5px;color:var(--ink-dim);display:flex;gap:10px;flex-wrap:wrap;}
   .row-meta a{color:var(--ink-dim);text-decoration:underline;text-decoration-style:dotted;}
@@ -573,6 +575,16 @@
     });
   }
 
+  function linkifyText(text){
+    if(!text) return '';
+    return text.replace(/(https?:\/\/[^\s<]+)/g, function(url){
+      var trail = '';
+      var m = url.match(/[.,;)]+$/);
+      if(m){ trail = m[0]; url = url.slice(0, url.length - trail.length); }
+      return '<a href="'+url+'" target="_blank" rel="noopener">'+url+'</a>'+trail;
+    });
+  }
+
   function renderTaskItem(t){
     var row = el('div','row-item');
     var top = el('div','row-top');
@@ -588,7 +600,7 @@
     top.appendChild(badges);
     row.appendChild(top);
     if(t.url) row.appendChild(el('div','row-title', t.title));
-    row.appendChild(el('div','task-instruction', t.instruction||''));
+    row.appendChild(el('div','task-instruction', linkifyText(t.instruction||'')));
     var meta = el('div','row-meta');
     meta.innerHTML = '<span>обнаружено '+fmtDate(t.created_date)+'</span>' + (t.last_checked_date ? '<span>проверено '+fmtDate(t.last_checked_date)+'</span>' : '');
     row.appendChild(meta);
