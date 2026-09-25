@@ -230,6 +230,7 @@
     <div class="table-controls">
       <input type="search" id="tasksSearch" placeholder="поиск по адресу или тексту…">
       <div id="tasksChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <button type="button" class="btn" id="tasksExportBtn" style="cursor:pointer;margin-left:auto;">Скачать CSV (текущий список)</button>
     </div>
     <div class="row-list" id="tasksList" style="max-height:640px;"></div>
   </section>
@@ -593,15 +594,20 @@
     return row;
   }
 
-  function refreshTasks(){
+  function getFilteredTasks(){
     var open = taskState.all.filter(function(t){ return t.status==='open'; });
     var q = (document.getElementById('tasksSearch').value||'').toLowerCase();
-    var filtered = open.filter(function(t){
+    return open.filter(function(t){
       if(taskState.filterType && t.type!==taskState.filterType) return false;
       if(!q) return true;
       var hay = ((t.url||'')+' '+(t.title||'')+' '+(t.instruction||'')).toLowerCase();
       return hay.indexOf(q)!==-1;
     });
+  }
+
+  function refreshTasks(){
+    var open = taskState.all.filter(function(t){ return t.status==='open'; });
+    var filtered = getFilteredTasks();
     document.getElementById('tasksCount').textContent = open.length;
     var list = document.getElementById('tasksList');
     list.innerHTML = '';
@@ -612,12 +618,53 @@
     filtered.forEach(function(t){ list.appendChild(renderTaskItem(t)); });
   }
 
+  function extractRedirectTarget(instruction){
+    if(!instruction) return '';
+    var m = instruction.match(/редиректит на\s+(\S+)/i);
+    if(!m) return '';
+    return m[1].replace(/[.,;)]+$/, '');
+  }
+
+  function csvEscape(v){
+    v = (v==null) ? '' : String(v);
+    if(/[";\n]/.test(v)){ v = '"' + v.replace(/"/g,'""') + '"'; }
+    return v;
+  }
+
+  function exportTasksCsv(){
+    var tasks = getFilteredTasks();
+    var header = ['URL','Тип задачи','Что сделать','Редирект на (если есть)','Обнаружено','Последняя проверка'];
+    var rows = [header];
+    tasks.forEach(function(t){
+      rows.push([
+        t.url || t.title || '',
+        TASK_TYPE_LABELS[t.type] || t.type,
+        t.instruction || '',
+        extractRedirectTarget(t.instruction),
+        t.created_date || '',
+        t.last_checked_date || ''
+      ]);
+    });
+    var csv = rows.map(function(r){ return r.map(csvEscape).join(';'); }).join('\r\n');
+    var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var today = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = 'zadachi-zashchita-pro-'+today+'.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
   function loadTasks(){
     fetch('data/tasks.json', { cache: 'no-store' })
       .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
       .then(function(tasks){
         taskState.all = tasks || [];
         document.getElementById('tasksSearch').addEventListener('input', refreshTasks);
+        document.getElementById('tasksExportBtn').addEventListener('click', exportTasksCsv);
         renderTaskChips();
         refreshTasks();
       })
