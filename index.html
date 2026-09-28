@@ -157,6 +157,26 @@
   }
   .chip.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
 
+  .tabs{display:flex;gap:8px;margin-top:18px;border-bottom:1px solid var(--border);}
+  .tab-btn{
+    font:inherit;font-size:13.5px;font-weight:600;color:var(--ink-dim);
+    background:none;border:none;border-bottom:2px solid transparent;
+    padding:10px 4px;margin-bottom:-1px;cursor:pointer;
+  }
+  .tab-btn.active{color:var(--ink);border-bottom-color:var(--accent);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .log-day-head{
+    font-size:12px;font-weight:700;color:var(--ink-dim);
+    padding:14px 2px 6px;position:sticky;top:0;background:var(--paper-raised);
+  }
+  .log-day-head:first-child{padding-top:2px;}
+  .badge.kind-appeared{color:var(--good);background:var(--good-bg);}
+  .badge.kind-task_created{color:var(--warn);background:var(--warn-bg);}
+  .badge.kind-task_closed{color:var(--good);background:var(--good-bg);}
+  .log-why{font-size:12.5px;color:var(--ink-dim);}
+
   .count-pill{
     font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;
   }
@@ -219,6 +239,13 @@
     </div>
   </header>
 
+  <nav class="tabs" id="mainTabs">
+    <button type="button" class="tab-btn active" data-tab="overview">Обзор</button>
+    <button type="button" class="tab-btn" data-tab="logs">Логи</button>
+  </nav>
+
+  <div class="tab-panel active" id="tabOverview">
+
   <section class="tiles" id="tiles"></section>
 
   <div id="attnBox"></div>
@@ -269,6 +296,22 @@
       <div class="row-list" id="removedList"></div>
     </div>
   </section>
+
+  </div>
+
+  <div class="tab-panel" id="tabLogs">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Журнал изменений <span class="count-pill warn" id="logCount">0</span></h2>
+        <span style="font-size:11.5px;color:var(--ink-dim);">что изменилось, когда и почему - собрано из всех дневных снимков и истории задач</span>
+      </div>
+      <div class="table-controls">
+        <input type="search" id="logSearch" placeholder="поиск по адресу, названию или причине…">
+        <div id="logChips" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div class="row-list" id="logList" style="max-height:720px;"></div>
+    </section>
+  </div>
 
   <footer class="note">
     Данные собираются раз в сутки скриптом на основе официального API Яндекс.Вебмастера (событий индексации и сводки по сайту). Один день — один снимок: карточки «добавлено» и «выпало» относятся к выбранной дате. Страница закрыта от индексации поисковиками (meta robots noindex).
@@ -537,6 +580,8 @@
     if(!days.length){
       document.getElementById('updatedTag').innerHTML = '<span class="dot-live" style="background:var(--bad)"></span>нет данных';
       document.getElementById('tiles').innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Данные ещё не поступили. Первый снимок появится после ближайшего запуска ежедневной проверки.</div>';
+      logState.daysLoaded = true;
+      tryRenderLog();
       return;
     }
     state.days = days;
@@ -544,6 +589,8 @@
     document.getElementById('updatedTag').innerHTML = '<span class="dot-live"></span>обновлено '+fmtDate(days[0].date);
     populateDaySelect();
     renderAll();
+    logState.daysLoaded = true;
+    tryRenderLog();
   }
 
   function loadFromJson(){
@@ -681,12 +728,141 @@
         document.getElementById('tasksExportBtn').addEventListener('click', exportTasksCsv);
         renderTaskChips();
         refreshTasks();
+        logState.tasksLoaded = true;
+        tryRenderLog();
       })
       .catch(function(){
         document.getElementById('tasksList').innerHTML = '';
         document.getElementById('tasksList').appendChild(el('div','empty-state','Не удалось загрузить список задач.'));
+        logState.tasksLoaded = true;
+        tryRenderLog();
       });
   }
+
+  var logState = { built:false, entries:[], filterKind:null, daysLoaded:false, tasksLoaded:false };
+
+  function closeReason(type){
+    if(type === 'dead_in_index') return 'Страница снова доступна: отвечает 200 или редиректит на рабочую страницу';
+    return 'Страница вернулась в поиск Яндекса';
+  }
+
+  function buildLog(){
+    var seen = {};
+    var entries = [];
+    function add(e){
+      var key = e.kind+'|'+e.date+'|'+(e.url||e.title||'');
+      if(seen[key]) return;
+      seen[key] = true;
+      entries.push(e);
+    }
+    state.days.forEach(function(day){
+      (day.appeared||[]).forEach(function(a){
+        add({ date:a.date, kind:'appeared', url:a.url, title:a.title, why:'Страница снова видна в поиске Яндекса' });
+      });
+      (day.removed||[]).forEach(function(r){
+        var why = 'Причина: '+(STATUS_LABELS[r.excluded_url_status]||r.excluded_url_status||'не указана');
+        if(r.bad_http_status) why += ', код '+r.bad_http_status;
+        if(r.target_url) why += ', редирект на '+shortUrl(r.target_url);
+        add({ date:r.date, kind:'removed', url:r.url, title:r.title, why:why, status:r.excluded_url_status, bad_http_status:r.bad_http_status });
+      });
+    });
+    taskState.all.forEach(function(t){
+      if(t.created_date){
+        add({ date:t.created_date, kind:'task_created', url:t.url, title:t.title, why:t.instruction||'', taskType:t.type });
+      }
+      if(t.closed_date){
+        add({ date:t.closed_date, kind:'task_closed', url:t.url, title:t.title, why:closeReason(t.type), taskType:t.type });
+      }
+    });
+    entries.sort(function(a,b){ return b.date.localeCompare(a.date); });
+    logState.entries = entries;
+    logState.built = true;
+  }
+
+  var LOG_KIND_LABELS = {
+    appeared:'Добавлено', removed:'Выпало', task_created:'Задача создана', task_closed:'Задача закрыта'
+  };
+
+  function logBadge(e){
+    if(e.kind === 'removed') return statusBadge(e.status, e.bad_http_status);
+    return '<span class="badge kind-'+e.kind+'">'+LOG_KIND_LABELS[e.kind]+'</span>';
+  }
+
+  function renderLogChips(){
+    var counts = {};
+    logState.entries.forEach(function(e){ counts[e.kind] = (counts[e.kind]||0)+1; });
+    var box = document.getElementById('logChips');
+    box.innerHTML = '';
+    var allChip = el('div','chip'+(logState.filterKind===null?' active':''), 'все');
+    allChip.onclick = function(){ logState.filterKind=null; refreshLog(); };
+    box.appendChild(allChip);
+    ['appeared','removed','task_created','task_closed'].forEach(function(k){
+      if(!counts[k]) return;
+      var c = el('div','chip'+(logState.filterKind===k?' active':''), LOG_KIND_LABELS[k]+' '+counts[k]);
+      c.onclick = function(){ logState.filterKind = (logState.filterKind===k)?null:k; refreshLog(); };
+      box.appendChild(c);
+    });
+  }
+
+  function refreshLog(){
+    if(!logState.built) buildLog();
+    var q = (document.getElementById('logSearch').value||'').toLowerCase();
+    var filtered = logState.entries.filter(function(e){
+      if(logState.filterKind && e.kind !== logState.filterKind) return false;
+      if(!q) return true;
+      var hay = ((e.url||'')+' '+(e.title||'')+' '+(e.why||'')).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    document.getElementById('logCount').textContent = logState.entries.length;
+    renderLogChips();
+    var list = document.getElementById('logList');
+    list.innerHTML = '';
+    if(filtered.length===0){
+      list.appendChild(el('div','empty-state','Ничего не найдено'));
+      return;
+    }
+    var lastDate = null;
+    filtered.forEach(function(e){
+      if(e.date !== lastDate){
+        list.appendChild(el('div','log-day-head', fmtDate(e.date)));
+        lastDate = e.date;
+      }
+      var row = el('div','row-item');
+      var top = el('div','row-top');
+      if(e.url){
+        var a = el('a','row-url', shortUrl(e.url));
+        a.href = e.url; a.target='_blank'; a.rel='noopener';
+        top.appendChild(a);
+      } else {
+        top.appendChild(el('div','row-url', e.title||''));
+      }
+      var badges = el('div','row-badges');
+      badges.innerHTML = logBadge(e);
+      top.appendChild(badges);
+      row.appendChild(top);
+      if(e.url && e.title) row.appendChild(el('div','row-title', e.title));
+      if(e.why) row.appendChild(el('div','log-why', e.why));
+      list.appendChild(row);
+    });
+  }
+
+  function tryRenderLog(){
+    if(logState.daysLoaded && logState.tasksLoaded){
+      buildLog();
+      refreshLog();
+    }
+  }
+
+  document.getElementById('logSearch').addEventListener('input', refreshLog);
+
+  document.getElementById('mainTabs').addEventListener('click', function(ev){
+    var btn = ev.target.closest('.tab-btn');
+    if(!btn) return;
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b===btn); });
+    var tab = btn.getAttribute('data-tab');
+    document.getElementById('tabOverview').classList.toggle('active', tab==='overview');
+    document.getElementById('tabLogs').classList.toggle('active', tab==='logs');
+  });
 
   loadFromJson();
   loadTasks();
