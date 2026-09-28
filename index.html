@@ -137,8 +137,10 @@
   .modal-head h3{margin:0;font-size:15px;}
   .modal-close{background:none;border:none;font-size:18px;color:var(--ink-dim);cursor:pointer;line-height:1;padding:4px 6px;}
   .modal-close:hover{color:var(--ink);}
-  .modal-search{padding:12px 18px;border-bottom:1px solid var(--border);}
-  .modal-search input{width:100%;box-sizing:border-box;}
+  .modal-search{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .modal-search input[type=search]{flex:1 1 220px;min-width:160px;box-sizing:border-box;}
+  .modal-filter-chk{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap;cursor:pointer;}
+  .modal-filter-chk input{cursor:pointer;}
   .modal-body{overflow-y:auto;padding:6px 18px 16px;}
   .modal-note{font-size:12.5px;color:var(--ink-dim);padding:10px 2px;line-height:1.5;}
   .modal-hint{font-size:11.5px;color:var(--ink-dim);padding:8px 2px 0;}
@@ -327,6 +329,10 @@
     </div>
     <div class="modal-search" id="modalSearchBox">
       <input type="search" id="modalSearch" placeholder="поиск по адресу или названию…">
+      <label class="modal-filter-chk" id="modalOnlyMissingWrap">
+        <input type="checkbox" id="modalOnlyMissing"> только без sitemap
+      </label>
+      <button type="button" class="btn" id="modalExportBtn" style="cursor:pointer;">Скачать CSV</button>
     </div>
     <div class="modal-meta" id="modalMeta"></div>
     <div class="modal-body" id="modalBody"></div>
@@ -411,14 +417,17 @@
 
   var searchableState = { loaded:false, loading:false, data:null };
   var MODAL_LIST_CAP = 400;
+  var modalLastFiltered = [];
 
-  function renderModalUrlList(items, query){
+  function renderModalUrlList(items, query, onlyMissing){
     var body = document.getElementById('modalBody');
     body.innerHTML = '';
     var q = (query||'').trim().toLowerCase();
-    var filtered = !q ? items : items.filter(function(it){
+    var base = onlyMissing ? items.filter(function(it){ return it.inSitemap===false; }) : items;
+    var filtered = !q ? base : base.filter(function(it){
       return (it.url+' '+(it.title||'')).toLowerCase().indexOf(q)!==-1;
     });
+    modalLastFiltered = filtered;
     if(filtered.length===0){
       body.appendChild(el('div','empty-state','Ничего не найдено'));
       return;
@@ -448,6 +457,7 @@
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalSearchBox').style.display = searchVisible ? '' : 'none';
     document.getElementById('modalSearch').value = '';
+    document.getElementById('modalOnlyMissing').checked = false;
     document.getElementById('modalMeta').textContent = metaText || '';
     document.getElementById('urlModal').classList.remove('hidden');
   }
@@ -459,7 +469,7 @@
   function openSearchableModal(){
     if(searchableState.loaded){
       openModal('Страницы в поиске ('+searchableState.data.length+')', true, 'список сверен с sitemap.xml: '+fmtDate(searchableState.checkedDate));
-      renderModalUrlList(searchableState.data, '');
+      renderModalUrlList(searchableState.data, '', false);
       return;
     }
     openModal('Страницы в поиске', false);
@@ -474,7 +484,7 @@
         searchableState.data = json.urls || [];
         searchableState.checkedDate = json.date || null;
         openModal('Страницы в поиске ('+searchableState.data.length+')', true, 'список сверен с sitemap.xml: '+fmtDate(searchableState.checkedDate));
-        renderModalUrlList(searchableState.data, '');
+        renderModalUrlList(searchableState.data, '', false);
       })
       .catch(function(){
         searchableState.loading = false;
@@ -505,8 +515,27 @@
     if(ev.key === 'Escape') closeModal();
   });
   document.getElementById('modalSearch').addEventListener('input', function(){
-    if(searchableState.loaded) renderModalUrlList(searchableState.data, this.value);
+    if(searchableState.loaded) renderModalUrlList(searchableState.data, this.value, document.getElementById('modalOnlyMissing').checked);
   });
+  document.getElementById('modalOnlyMissing').addEventListener('change', function(){
+    if(searchableState.loaded) renderModalUrlList(searchableState.data, document.getElementById('modalSearch').value, this.checked);
+  });
+  document.getElementById('modalExportBtn').onclick = function(){
+    if(!modalLastFiltered.length) return;
+    var header = ['URL','Заголовок','Есть в sitemap'];
+    var rows = [header];
+    modalLastFiltered.forEach(function(it){
+      rows.push([it.url, it.title||'', it.inSitemap===false ? 'нет' : 'да']);
+    });
+    var csv = rows.map(function(r){ return r.map(csvEscape).join(';'); }).join('\r\n');
+    var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'stranicy-v-poiske.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   function statusBadge(status, http){
     var label = STATUS_LABELS[status] || status || '—';
