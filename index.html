@@ -196,6 +196,7 @@
   .task-instruction a:hover{color:var(--accent);}
   .task-group-count{font-weight:700;}
   .row-meta{font-size:11.5px;color:var(--ink-dim);display:flex;gap:10px;flex-wrap:wrap;}
+  .checked-tag.stale{color:var(--warn);font-weight:700;}
   .row-meta a{color:var(--ink-dim);text-decoration:underline;text-decoration-style:dotted;}
   .row-title{font-size:12px;color:var(--ink-dim);}
   .empty-state{padding:28px 4px;text-align:center;color:var(--ink-dim);font-size:13px;}
@@ -574,6 +575,29 @@
     });
   }
 
+  function pluralDays(n){
+    var n10 = n % 10, n100 = n % 100;
+    if(n10===1 && n100!==11) return 'день';
+    if(n10>=2 && n10<=4 && (n100<12||n100>14)) return 'дня';
+    return 'дней';
+  }
+
+  function daysSince(dateStr){
+    var d = new Date(dateStr+'T00:00:00');
+    var now = new Date();
+    var utcNow = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    var utcThen = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((utcNow-utcThen)/86400000);
+  }
+
+  function checkedTag(dateStr){
+    if(!dateStr) return '<span class="checked-tag stale">ни разу не перепроверялось</span>';
+    var days = daysSince(dateStr);
+    var freshText = days<=0 ? 'сегодня' : (days===1 ? 'вчера' : days+' '+pluralDays(days)+' назад');
+    var stale = days>3 ? ' stale' : '';
+    return '<span class="checked-tag'+stale+'">подтверждено актуальным '+fmtDate(dateStr)+' ('+freshText+')</span>';
+  }
+
   function renderTaskItem(t){
     var row = el('div','row-item');
     var top = el('div','row-top');
@@ -591,7 +615,7 @@
     if(t.url) row.appendChild(el('div','row-title', t.title));
     row.appendChild(el('div','task-instruction', linkifyText(t.instruction||'')));
     var meta = el('div','row-meta');
-    meta.innerHTML = '<span>обнаружено '+fmtDate(t.created_date)+'</span>' + (t.last_checked_date ? '<span>проверено '+fmtDate(t.last_checked_date)+'</span>' : '');
+    meta.innerHTML = '<span>обнаружено '+fmtDate(t.created_date)+'</span>' + checkedTag(t.last_checked_date);
     row.appendChild(meta);
     return row;
   }
