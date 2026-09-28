@@ -116,23 +116,6 @@
   .tile.good .value{color:var(--good);}
   .tile.bad .value{color:var(--bad);}
 
-  .attn{
-    margin-top:16px;border-radius:12px;border:1px solid rgba(194,59,59,0.3);
-    background:var(--bad-bg);padding:14px 16px;display:flex;gap:12px;align-items:flex-start;
-  }
-  .attn .icon{
-    width:22px;height:22px;border-radius:6px;background:var(--bad);color:#fff;
-    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none;
-  }
-  .attn strong{font-size:13.5px;}
-  .attn ul{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-dim);}
-  .attn ul a{color:var(--ink);text-decoration:underline;text-decoration-style:dotted;}
-  .attn ul a:hover{color:var(--accent);}
-  .attn.empty{
-    background:var(--good-bg);border-color:rgba(31,138,95,0.3);
-  }
-  .attn.empty .icon{background:var(--good);}
-
   .panel{
     background:var(--paper-raised);border:1px solid var(--border);
     border-radius:14px;padding:18px;box-shadow:var(--shadow);margin-top:16px;
@@ -247,8 +230,6 @@
   <div class="tab-panel active" id="tabOverview">
 
   <section class="tiles" id="tiles"></section>
-
-  <div id="attnBox"></div>
 
   <section class="panel" id="tasksPanel">
     <div class="panel-head">
@@ -382,45 +363,6 @@
     tiles.appendChild(t5);
   }
 
-  function isImportantCollection(u){
-    return shortUrl(u).indexOf('/collection/') === 0;
-  }
-
-  function renderAttention(){
-    var day = state.selected;
-    var removed = day.removed || [];
-    var critical = removed.filter(function(r){
-      return r.excluded_url_status==='HTTP_ERROR' || (r.excluded_url_status==='NOT_CANONICAL' && isImportantCollection(r.url));
-    });
-    var watch = removed.filter(function(r){
-      return r.excluded_url_status==='REDIRECT_NOTSEARCHABLE' && isImportantCollection(r.url) && critical.indexOf(r)===-1;
-    });
-
-    var box = document.getElementById('attnBox');
-    box.innerHTML = '';
-
-    if(critical.length===0 && watch.length===0){
-      var ok = el('div','attn empty');
-      ok.innerHTML = '<div class="icon">&#10003;</div><div><strong>Важных проблем не найдено</strong><div style="font-size:12.5px;color:var(--ink-dim);margin-top:2px;">Ошибок 404 и слетевших категорий за этот день нет.</div></div>';
-      box.appendChild(ok);
-      return;
-    }
-    var a = el('div','attn');
-    var html = '<div class="icon">!</div><div><strong>Требует внимания — '+(critical.length+watch.length)+'</strong><ul>';
-    function attnLink(u){
-      return '<a href="'+u+'" target="_blank" rel="noopener">'+shortUrl(u)+'</a>';
-    }
-    critical.slice(0,5).forEach(function(r){
-      html += '<li>'+attnLink(r.url)+' — '+(STATUS_LABELS[r.excluded_url_status]||r.excluded_url_status)+(r.bad_http_status?' ('+r.bad_http_status+')':'')+'</li>';
-    });
-    watch.slice(0,5).forEach(function(r){
-      html += '<li>'+attnLink(r.url)+' — категория ушла редиректом'+(r.target_url?(' на '+attnLink(r.target_url)):'')+'</li>';
-    });
-    html += '</ul></div>';
-    a.innerHTML = html;
-    box.appendChild(a);
-  }
-
   function renderChart(){
     var svg = document.getElementById('chart');
     var days = state.days.slice().reverse();
@@ -552,7 +494,6 @@
 
   function renderAll(){
     renderTiles();
-    renderAttention();
     renderChart();
     refreshTables();
   }
