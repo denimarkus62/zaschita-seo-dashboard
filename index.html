@@ -116,6 +116,31 @@
   .delta.flat{color:var(--ink-dim);}
   .tile.good .value{color:var(--good);}
   .tile.bad .value{color:var(--bad);}
+  .tile.clickable{cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+  .tile.clickable:hover{border-color:var(--accent);}
+  .tile.clickable .label{display:flex;align-items:center;gap:6px;}
+  .tile.clickable .label::after{content:'→';color:var(--ink-dim);font-weight:700;}
+  .tile.flash{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg,rgba(209,44,44,0.15));}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;
+    align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.hidden{display:none;}
+  .modal-box{
+    background:var(--paper-raised);border-radius:14px;box-shadow:var(--shadow);
+    width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  .modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border);}
+  .modal-head h3{margin:0;font-size:15px;}
+  .modal-close{background:none;border:none;font-size:18px;color:var(--ink-dim);cursor:pointer;line-height:1;padding:4px 6px;}
+  .modal-close:hover{color:var(--ink);}
+  .modal-search{padding:12px 18px;border-bottom:1px solid var(--border);}
+  .modal-search input{width:100%;box-sizing:border-box;}
+  .modal-body{overflow-y:auto;padding:6px 18px 16px;}
+  .modal-note{font-size:12.5px;color:var(--ink-dim);padding:10px 2px;line-height:1.5;}
+  .modal-hint{font-size:11.5px;color:var(--ink-dim);padding:8px 2px 0;}
 
   .panel{
     background:var(--paper-raised);border:1px solid var(--border);
@@ -247,7 +272,7 @@
   </section>
 
   <section class="tables">
-    <div class="panel">
+    <div class="panel" id="appearedPanel">
       <div class="panel-head">
         <h2>Добавлено в поиск <span class="count-pill good" id="appearedCount">0</span></h2>
       </div>
@@ -257,7 +282,7 @@
       <div class="row-list" id="appearedList"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="removedPanel">
       <div class="panel-head">
         <h2>Выпало из поиска <span class="count-pill warn" id="removedCount">0</span></h2>
       </div>
@@ -288,6 +313,19 @@
   <footer class="note">
     Данные собираются раз в сутки скриптом на основе официального API Яндекс.Вебмастера (событий индексации и сводки по сайту). Один день — один снимок: карточки «добавлено» и «выпало» относятся к выбранной дате. Страница закрыта от индексации поисковиками (meta robots noindex).
   </footer>
+</div>
+
+<div class="modal-overlay hidden" id="urlModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="modalTitle"></h3>
+      <button type="button" class="modal-close" id="modalCloseBtn">✕</button>
+    </div>
+    <div class="modal-search" id="modalSearchBox">
+      <input type="search" id="modalSearch" placeholder="поиск по адресу или названию…">
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
 </div>
 
 <script>
@@ -333,26 +371,129 @@
     var tiles = document.getElementById('tiles');
     tiles.innerHTML = '';
 
-    var t1 = el('div','tile');
+    var t1 = el('div','tile clickable');
     t1.innerHTML = '<div class="label">Страниц в поиске</div><div class="value">'+fmtInt(day.searchable_pages_count)+'</div>'+deltaTag(day.searchable_pages_count, prev && prev.searchable_pages_count, true);
+    t1.onclick = openSearchableModal;
     tiles.appendChild(t1);
 
-    var t2 = el('div','tile');
+    var t2 = el('div','tile clickable');
     t2.innerHTML = '<div class="label">Исключено страниц</div><div class="value">'+fmtInt(day.excluded_pages_count)+'</div>'+deltaTag(day.excluded_pages_count, prev && prev.excluded_pages_count, false);
+    t2.onclick = openExcludedModal;
     tiles.appendChild(t2);
 
     var t3 = el('div','tile');
     t3.innerHTML = '<div class="label">Индекс качества (SQI)</div><div class="value">'+fmtInt(day.sqi)+'</div>'+deltaTag(day.sqi, prev && prev.sqi, true);
     tiles.appendChild(t3);
 
-    var t4 = el('div','tile good');
+    var t4 = el('div','tile good clickable');
     t4.innerHTML = '<div class="label">Добавлено в поиск</div><div class="value">'+fmtInt((day.appeared||[]).length)+'</div><div class="delta flat">за '+fmtDate(day.date)+'</div>';
+    t4.onclick = function(){ jumpToPanel('appearedPanel'); };
     tiles.appendChild(t4);
 
-    var t5 = el('div','tile bad');
+    var t5 = el('div','tile bad clickable');
     t5.innerHTML = '<div class="label">Выпало из поиска</div><div class="value">'+fmtInt((day.removed||[]).length)+'</div><div class="delta flat">за '+fmtDate(day.date)+'</div>';
+    t5.onclick = function(){ jumpToPanel('removedPanel'); };
     tiles.appendChild(t5);
   }
+
+  function jumpToPanel(panelId){
+    var panel = document.getElementById(panelId);
+    if(!panel) return;
+    panel.scrollIntoView({behavior:'smooth', block:'start'});
+    panel.classList.add('flash');
+    setTimeout(function(){ panel.classList.remove('flash'); }, 1200);
+  }
+
+  var searchableState = { loaded:false, loading:false, data:null };
+  var MODAL_LIST_CAP = 400;
+
+  function renderModalUrlList(items, query){
+    var body = document.getElementById('modalBody');
+    body.innerHTML = '';
+    var q = (query||'').trim().toLowerCase();
+    var filtered = !q ? items : items.filter(function(it){
+      return (it.url+' '+(it.title||'')).toLowerCase().indexOf(q)!==-1;
+    });
+    if(filtered.length===0){
+      body.appendChild(el('div','empty-state','Ничего не найдено'));
+      return;
+    }
+    var shown = filtered.slice(0, MODAL_LIST_CAP);
+    shown.forEach(function(it){
+      var row = el('div','row-item');
+      var top = el('div','row-top');
+      var a = el('a','row-url', shortUrl(it.url));
+      a.href = it.url; a.target='_blank'; a.rel='noopener';
+      top.appendChild(a);
+      row.appendChild(top);
+      if(it.title){ row.appendChild(el('div','row-title', it.title)); }
+      body.appendChild(row);
+    });
+    if(filtered.length > MODAL_LIST_CAP){
+      body.appendChild(el('div','modal-hint','Показаны первые '+MODAL_LIST_CAP+' из '+filtered.length+' — уточните поиск, чтобы увидеть остальные.'));
+    }
+  }
+
+  function openModal(title, searchVisible){
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalSearchBox').style.display = searchVisible ? '' : 'none';
+    document.getElementById('modalSearch').value = '';
+    document.getElementById('urlModal').classList.remove('hidden');
+  }
+
+  function closeModal(){
+    document.getElementById('urlModal').classList.add('hidden');
+  }
+
+  function openSearchableModal(){
+    if(searchableState.loaded){
+      openModal('Страницы в поиске ('+searchableState.data.length+')', true);
+      renderModalUrlList(searchableState.data, '');
+      return;
+    }
+    openModal('Страницы в поиске', false);
+    document.getElementById('modalBody').innerHTML = '<div class="modal-note">Загружаю список…</div>';
+    if(searchableState.loading) return;
+    searchableState.loading = true;
+    fetch('data/search_urls_current.json', { cache:'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+      .then(function(json){
+        searchableState.loaded = true;
+        searchableState.loading = false;
+        searchableState.data = json.urls || [];
+        openModal('Страницы в поиске ('+searchableState.data.length+')', true);
+        renderModalUrlList(searchableState.data, '');
+      })
+      .catch(function(){
+        searchableState.loading = false;
+        document.getElementById('modalBody').innerHTML = '<div class="modal-note">Не удалось загрузить список. Попробуйте обновить страницу.</div>';
+      });
+  }
+
+  function openExcludedModal(){
+    openModal('Исключено страниц', false);
+    document.getElementById('modalBody').innerHTML =
+      '<div class="modal-note">У Яндекс.Вебмастера нет метода, который отдаёт точный текущий список исключённых страниц — только историю событий (когда и почему страница пропала или вернулась). '+
+      'Собрать список из истории самостоятельно не получилось надёжно: подсчёт по событиям не совпадает с официальным числом на карточке, поэтому показывать его как факт не буду, чтобы не вводить в заблуждение.<br><br>'+
+      'Ближе всего к реальному списку проблемных страниц — вкладка «Задачи» ниже: туда попадают конкретные проверенные вручную случаи (404 в поиске, странные редиректы, низкое качество карточки и т.д.), каждый со своей датой последней проверки.</div>';
+    var btn = el('button','btn', 'Перейти к задачам');
+    btn.type = 'button';
+    btn.style.cursor = 'pointer';
+    btn.style.marginTop = '10px';
+    btn.onclick = function(){ closeModal(); jumpToPanel('tasksPanel'); };
+    document.getElementById('modalBody').appendChild(btn);
+  }
+
+  document.getElementById('modalCloseBtn').onclick = closeModal;
+  document.getElementById('urlModal').addEventListener('click', function(ev){
+    if(ev.target.id === 'urlModal') closeModal();
+  });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape') closeModal();
+  });
+  document.getElementById('modalSearch').addEventListener('input', function(){
+    if(searchableState.loaded) renderModalUrlList(searchableState.data, this.value);
+  });
 
   function statusBadge(status, http){
     var label = STATUS_LABELS[status] || status || '—';
