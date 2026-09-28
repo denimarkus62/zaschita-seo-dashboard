@@ -195,6 +195,11 @@
   .task-instruction a{color:var(--ink);text-decoration:underline;text-decoration-style:dotted;}
   .task-instruction a:hover{color:var(--accent);}
   .task-group-count{font-weight:700;}
+  .task-url-list{font-size:12px;margin-top:2px;}
+  .task-url-list summary{cursor:pointer;color:var(--ink-dim);user-select:none;padding:2px 0;}
+  .task-url-list summary:hover{color:var(--accent);}
+  .task-url-ul{list-style:none;margin:6px 0 0;padding:8px 10px;background:var(--paper-dim);border-radius:8px;max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+  .task-url-ul .row-url{word-break:break-all;}
   .row-meta{font-size:11.5px;color:var(--ink-dim);display:flex;gap:10px;flex-wrap:wrap;}
   .checked-tag.stale{color:var(--warn);font-weight:700;}
   .row-meta a{color:var(--ink-dim);text-decoration:underline;text-decoration-style:dotted;}
@@ -614,6 +619,23 @@
     row.appendChild(top);
     if(t.url) row.appendChild(el('div','row-title', t.title));
     row.appendChild(el('div','task-instruction', linkifyText(t.instruction||'')));
+    if(t.urls && t.urls.length){
+      var details = document.createElement('details');
+      details.className = 'task-url-list';
+      var summary = document.createElement('summary');
+      summary.textContent = 'Показать список ссылок ('+t.urls.length+')';
+      details.appendChild(summary);
+      var ul = el('ul','task-url-ul');
+      t.urls.forEach(function(u){
+        var li = document.createElement('li');
+        var a = el('a','row-url', u);
+        a.href = u; a.target='_blank'; a.rel='noopener';
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+      details.appendChild(ul);
+      row.appendChild(details);
+    }
     var meta = el('div','row-meta');
     meta.innerHTML = '<span>обнаружено '+fmtDate(t.created_date)+'</span>' + checkedTag(t.last_checked_date);
     row.appendChild(meta);
