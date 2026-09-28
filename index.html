@@ -114,6 +114,7 @@
   .delta.up{color:var(--good);}
   .delta.down{color:var(--bad);}
   .delta.flat{color:var(--ink-dim);}
+  .tile-checked{font-size:10.5px;color:var(--ink-dim);}
   .tile.good .value{color:var(--good);}
   .tile.bad .value{color:var(--bad);}
   .tile.clickable{cursor:pointer;transition:border-color .15s,box-shadow .15s;}
@@ -141,6 +142,9 @@
   .modal-body{overflow-y:auto;padding:6px 18px 16px;}
   .modal-note{font-size:12.5px;color:var(--ink-dim);padding:10px 2px;line-height:1.5;}
   .modal-hint{font-size:11.5px;color:var(--ink-dim);padding:8px 2px 0;}
+  .modal-meta{font-size:11.5px;color:var(--ink-dim);padding:0 18px 8px;}
+  .modal-meta:empty{display:none;}
+  .row-item .badge.not-in-sitemap{color:var(--warn);background:var(--warn-bg);font-size:10.5px;margin-left:6px;}
 
   .panel{
     background:var(--paper-raised);border:1px solid var(--border);
@@ -324,6 +328,7 @@
     <div class="modal-search" id="modalSearchBox">
       <input type="search" id="modalSearch" placeholder="поиск по адресу или названию…">
     </div>
+    <div class="modal-meta" id="modalMeta"></div>
     <div class="modal-body" id="modalBody"></div>
   </div>
 </div>
@@ -372,17 +377,17 @@
     tiles.innerHTML = '';
 
     var t1 = el('div','tile clickable');
-    t1.innerHTML = '<div class="label">Страниц в поиске</div><div class="value">'+fmtInt(day.searchable_pages_count)+'</div>'+deltaTag(day.searchable_pages_count, prev && prev.searchable_pages_count, true);
+    t1.innerHTML = '<div class="label">Страниц в поиске</div><div class="value">'+fmtInt(day.searchable_pages_count)+'</div>'+deltaTag(day.searchable_pages_count, prev && prev.searchable_pages_count, true)+'<div class="tile-checked">проверено '+fmtDate(day.date)+'</div>';
     t1.onclick = openSearchableModal;
     tiles.appendChild(t1);
 
     var t2 = el('div','tile clickable');
-    t2.innerHTML = '<div class="label">Исключено страниц</div><div class="value">'+fmtInt(day.excluded_pages_count)+'</div>'+deltaTag(day.excluded_pages_count, prev && prev.excluded_pages_count, false);
+    t2.innerHTML = '<div class="label">Исключено страниц</div><div class="value">'+fmtInt(day.excluded_pages_count)+'</div>'+deltaTag(day.excluded_pages_count, prev && prev.excluded_pages_count, false)+'<div class="tile-checked">проверено '+fmtDate(day.date)+'</div>';
     t2.onclick = openExcludedModal;
     tiles.appendChild(t2);
 
     var t3 = el('div','tile');
-    t3.innerHTML = '<div class="label">Индекс качества (SQI)</div><div class="value">'+fmtInt(day.sqi)+'</div>'+deltaTag(day.sqi, prev && prev.sqi, true);
+    t3.innerHTML = '<div class="label">Индекс качества (SQI)</div><div class="value">'+fmtInt(day.sqi)+'</div>'+deltaTag(day.sqi, prev && prev.sqi, true)+'<div class="tile-checked">проверено '+fmtDate(day.date)+'</div>';
     tiles.appendChild(t3);
 
     var t4 = el('div','tile good clickable');
@@ -425,6 +430,11 @@
       var a = el('a','row-url', shortUrl(it.url));
       a.href = it.url; a.target='_blank'; a.rel='noopener';
       top.appendChild(a);
+      if(it.inSitemap===false){
+        var badges = el('div','row-badges');
+        badges.innerHTML = '<span class="badge not-in-sitemap">нет в sitemap</span>';
+        top.appendChild(badges);
+      }
       row.appendChild(top);
       if(it.title){ row.appendChild(el('div','row-title', it.title)); }
       body.appendChild(row);
@@ -434,10 +444,11 @@
     }
   }
 
-  function openModal(title, searchVisible){
+  function openModal(title, searchVisible, metaText){
     document.getElementById('modalTitle').textContent = title;
     document.getElementById('modalSearchBox').style.display = searchVisible ? '' : 'none';
     document.getElementById('modalSearch').value = '';
+    document.getElementById('modalMeta').textContent = metaText || '';
     document.getElementById('urlModal').classList.remove('hidden');
   }
 
@@ -447,7 +458,7 @@
 
   function openSearchableModal(){
     if(searchableState.loaded){
-      openModal('Страницы в поиске ('+searchableState.data.length+')', true);
+      openModal('Страницы в поиске ('+searchableState.data.length+')', true, 'список сверен с sitemap.xml: '+fmtDate(searchableState.checkedDate));
       renderModalUrlList(searchableState.data, '');
       return;
     }
@@ -461,7 +472,8 @@
         searchableState.loaded = true;
         searchableState.loading = false;
         searchableState.data = json.urls || [];
-        openModal('Страницы в поиске ('+searchableState.data.length+')', true);
+        searchableState.checkedDate = json.date || null;
+        openModal('Страницы в поиске ('+searchableState.data.length+')', true, 'список сверен с sitemap.xml: '+fmtDate(searchableState.checkedDate));
         renderModalUrlList(searchableState.data, '');
       })
       .catch(function(){
@@ -471,7 +483,8 @@
   }
 
   function openExcludedModal(){
-    openModal('Исключено страниц', false);
+    var day = state.selected;
+    openModal('Исключено страниц', false, 'счётчик Яндекса на '+fmtDate(day && day.date));
     document.getElementById('modalBody').innerHTML =
       '<div class="modal-note">У Яндекс.Вебмастера нет метода, который отдаёт точный текущий список исключённых страниц — только историю событий (когда и почему страница пропала или вернулась). '+
       'Собрать список из истории самостоятельно не получилось надёжно: подсчёт по событиям не совпадает с официальным числом на карточке, поэтому показывать его как факт не буду, чтобы не вводить в заблуждение.<br><br>'+
