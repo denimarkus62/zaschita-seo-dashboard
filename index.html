@@ -216,7 +216,7 @@
   .badge.st-OTHER, .badge.st-CLEAN_PARAMS, .badge.st-DUPLICATE, .badge.st-NO_INDEX{color:var(--ink-dim);background:var(--paper-dim);}
   .badge.http{color:#fff;background:var(--bad);}
   .badge.tt-dead_in_index, .badge.tt-generic_review{color:var(--bad);background:var(--bad-bg);}
-  .badge.tt-low_quality, .badge.tt-thin_content, .badge.tt-redirect_check, .badge.tt-sitemap_gap, .badge.tt-sitemap_stale_redirect{color:var(--warn);background:var(--warn-bg);}
+  .badge.tt-low_quality, .badge.tt-thin_content, .badge.tt-redirect_check, .badge.tt-sitemap_gap{color:var(--warn);background:var(--warn-bg);}
   .task-instruction{font-size:12.5px;color:var(--ink);line-height:1.5;background:var(--paper-dim);border-radius:8px;padding:8px 10px;word-break:break-word;}
   .task-instruction a{color:var(--ink);text-decoration:underline;text-decoration-style:dotted;}
   .task-instruction a:hover{color:var(--accent);}
@@ -656,8 +656,7 @@
 
   var TASK_TYPE_LABELS = {
     low_quality:'Низкое качество', redirect_check:'Проверить редирект', generic_review:'Проверить вручную',
-    thin_content:'Не было никогда показов в Яндексе', dead_in_index:'404, но в поиске', sitemap_gap:'Пропуск в sitemap',
-    sitemap_stale_redirect:'Устаревший адрес в sitemap'
+    thin_content:'Не было никогда показов в Яндексе', dead_in_index:'404, но в поиске', sitemap_gap:'Пропуск в sitemap'
   };
   var taskState = { all:[], filterType:null };
 
