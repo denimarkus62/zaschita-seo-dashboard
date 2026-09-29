@@ -663,13 +663,16 @@
   function renderTaskChips(){
     var open = taskState.all.filter(function(t){ return t.status==='open'; });
     var counts = {};
-    open.forEach(function(t){ counts[t.type] = (counts[t.type]||0)+1; });
+    open.forEach(function(t){
+      var n = (typeof t.count === 'number') ? t.count : 1;
+      counts[t.type] = (counts[t.type]||0) + n;
+    });
     var box = document.getElementById('tasksChips');
     box.innerHTML = '';
     var allChip = el('div','chip'+(taskState.filterType===null?' active':''), 'все');
     allChip.onclick = function(){ taskState.filterType=null; refreshTasks(); };
     box.appendChild(allChip);
-    Object.keys(counts).sort(function(a,b){return counts[b]-counts[a];}).forEach(function(tp){
+    Object.keys(counts).filter(function(tp){ return counts[tp] > 0; }).sort(function(a,b){return counts[b]-counts[a];}).forEach(function(tp){
       var c = el('div','chip'+(taskState.filterType===tp?' active':''), (TASK_TYPE_LABELS[tp]||tp)+' '+counts[tp]);
       c.onclick = function(){ taskState.filterType = (taskState.filterType===tp)?null:tp; refreshTasks(); };
       box.appendChild(c);
@@ -759,10 +762,14 @@
     });
   }
 
+  function effectiveTaskCount(list){
+    return list.reduce(function(sum,t){ return sum + ((typeof t.count==='number') ? t.count : 1); }, 0);
+  }
+
   function refreshTasks(){
     var open = taskState.all.filter(function(t){ return t.status==='open'; });
     var filtered = getFilteredTasks();
-    document.getElementById('tasksCount').textContent = open.length;
+    document.getElementById('tasksCount').textContent = effectiveTaskCount(open);
     renderTaskChips();
     var list = document.getElementById('tasksList');
     list.innerHTML = '';
