@@ -60,7 +60,7 @@ td a{color:var(--text);text-decoration:none;border-bottom:1px dotted var(--muted
   <label>С<input type="date" id="df"></label>
   <label>По<input type="date" id="dt"></label>
   <div class="presets" role="group" aria-label="Быстрый выбор периода">
-    <button class="pre" data-n="7">7 дней</button><button class="pre" data-n="14">14 дней</button><button class="pre" data-n="28">28 дней</button><button class="pre" data-n="90">90 дней</button><button class="pre" data-n="180">180 дней</button>
+    <button class="pre" data-n="7">7 дней</button><button class="pre" data-n="14">14 дней</button><button class="pre" data-n="28">28 дней</button><button class="pre" data-n="60">60 дней</button><button class="pre" data-n="180">Весь период</button>
   </div>
 </div>
 <div class="kpis" id="kpis"></div>
@@ -150,7 +150,7 @@ function kpi(label,c,p,f,invert,unit){
 }
 function renderTop(){
   const len=V.len,c=tot(a,b),p=V.hasPrev?tot(a-len,a-1):null;
-  $('sub').textContent='Период: '+D.dates[a]+' .. '+D.dates[b]+' ('+len+' дн.). '+(V.hasPrev?'Сравнение с '+D.dates[a-len]+' .. '+D.dates[a-1]+'.':'Сравнения нет: данные начинаются с '+D.dates[0]+', а для сравнения нужен такой же период до выбранного.')+' Обновлено: '+D.generated+'. Данные Google отстают на 2-3 дня.';
+  $('sub').textContent='Период: '+D.dates[a]+' .. '+D.dates[b]+' ('+len+' дн.). '+(V.hasPrev?'Сравнение с '+D.dates[a-len]+' .. '+D.dates[a-1]+'.':'Сравнения нет: данные начинаются с '+D.dates[0]+', а для сравнения нужен такой же период до выбранного.')+' Обновлено: '+D.generated+'. Данные Google отстают на 3-4 дня.';
   $('kpis').innerHTML=kpi('Клики',c.c,p&&p.c,fmt)+kpi('Показы',c.i,p&&p.i,fmt)+kpi('CTR',c.ctr,p&&p.ctr,pct,false,'pp')+kpi('Средняя позиция',c.p,p&&p.p,x=>x.toFixed(1).replace('.',','),true);
   $('df').value=D.dates[a];$('dt').value=D.dates[b];
   document.querySelectorAll('.pre').forEach(x=>{const n=+x.dataset.n;x.setAttribute('aria-pressed',String(b===LAST&&a===Math.max(0,N-n)));});
